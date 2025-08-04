@@ -1,0 +1,6 @@
+name: BedWarsEcho
+   version: 1.0.0
+   main: com.andrei1058.bedwarsnpcfill.BedWarsNPCFillPlugin
+   api-version: 1.13
+   dependencies:
+     - bedwars
