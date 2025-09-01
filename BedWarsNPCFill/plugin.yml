@@ -1,7 +1,0 @@
-name: BedWarsNPCFill
-version: 1.0.0
-main: com.andrei1058.bedwarsnpcfill.BedWarsNPCFillPlugin
-author: Andrei1058
-description: Fills empty BedWars teams with simple NPCs for better gameplay
-api-version: 1.17
-soft-dependencies: Citizens

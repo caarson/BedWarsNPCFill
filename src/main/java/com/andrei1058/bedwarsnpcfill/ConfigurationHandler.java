@@ -1,110 +1,65 @@
 package com.andrei1058.bedwarsnpcfill;
 
 import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.configuration.ConfigurationSection;
-import java.util.ArrayList;
-import java.util.List;
+import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.plugin.java.JavaPlugin;
+
+import java.io.File;
+import java.io.IOException;
 
 public class ConfigurationHandler {
-    private final BedWarsNPCFillPlugin plugin;
+
+    private final JavaPlugin plugin;
     private FileConfiguration config;
-    
-    // Spawn thresholds
-    private int minPlayersToSpawn;
-    private int maxNPCsPerTeam;
-    
-    // Combat behavior
-    private int combatRadius;
-    private int bridgingRange;
-    
-    // Bed breaking proximity
-    private int bedBreakProximity;
-    
-    // Bed defense template
-    private List<BlockOffset> bedDefenseTemplate;
-    
-    // Titles and messages
-    private String bedBrokenTitle;
-    private String bedBrokenSubtitle;
-    
-    public ConfigurationHandler(BedWarsNPCFillPlugin plugin) {
+    private File configFile;
+
+    public ConfigurationHandler(JavaPlugin plugin) {
         this.plugin = plugin;
         loadConfig();
     }
-    
+
     private void loadConfig() {
-        config = plugin.getConfig();
-        
-        // Spawn thresholds
-        minPlayersToSpawn = config.getInt("spawnThresholds.minPlayers", 1);
-        maxNPCsPerTeam = config.getInt("spawnThresholds.maxNPCsPerTeam", 3);
-        
-        // Combat behavior
-        combatRadius = config.getInt("combatRadius", 10);
-        bridgingRange = config.getInt("bridgingRange", 20);
-        
-        // Bed breaking proximity
-        bedBreakProximity = config.getInt("bedBreakProximity", 5);
-        
-        // Bed defense template
-        bedDefenseTemplate = new ArrayList<>();
-        ConfigurationSection templateSection = config.getConfigurationSection("bedDefenseTemplate");
-        if (templateSection != null) {
-            for (String key : templateSection.getKeys(false)) {
-                ConfigurationSection blockSection = templateSection.getConfigurationSection(key);
-                if (blockSection != null) {
-                    int x = blockSection.getInt("x", 0);
-                    int y = blockSection.getInt("y", 0);
-                    int z = blockSection.getInt("z", 0);
-                    String type = blockSection.getString("type", "AIR");
-                    bedDefenseTemplate.add(new BlockOffset(x, y, z, type));
-                }
-            }
-        } else {
-            // Default template
-            bedDefenseTemplate.add(new BlockOffset(0, 0, 0, "BED"));
-            bedDefenseTemplate.add(new BlockOffset(1, 0, 0, "OAK_PLANKS"));
-            bedDefenseTemplate.add(new BlockOffset(-1, 0, 0, "OAK_PLANKS"));
-            bedDefenseTemplate.add(new BlockOffset(0, 0, 1, "OAK_PLANKS"));
-            bedDefenseTemplate.add(new BlockOffset(0, 0, -1, "OAK_PLANKS"));
+        if (!plugin.getDataFolder().exists()) {
+            plugin.getDataFolder().mkdirs();
         }
-        
-        // Titles and messages
-        bedBrokenTitle = config.getString("titles.bedBrokenTitle", "BED BROKEN");
-        bedBrokenSubtitle = config.getString("titles.bedBrokenSubtitle", "NPC has broken your bed");
+
+        configFile = new File(plugin.getDataFolder(), "config.yml");
+        if (!configFile.exists()) {
+            plugin.saveResource("config.yml", false);
+        }
+
+        config = YamlConfiguration.loadConfiguration(configFile);
+    }
+
+    public void saveConfig() {
+        try {
+            config.save(configFile);
+        } catch (IOException e) {
+            plugin.getLogger().severe("Could not save config.yml: " + e.getMessage());
+        }
+    }
+
+    public FileConfiguration getConfig() {
+        return config;
+    }
+
+    public int getSpawnThreshold() {
+        return config.getInt("spawnThresholds", 2);
+    }
+
+    public double getCombatRadius() {
+        return config.getDouble("combatRadius", 10.0);
+    }
+
+    public double getBridgingRange() {
+        return config.getDouble("bridgingRange", 15.0);
+    }
+
+    public double getBedBreakProximity() {
+        return config.getDouble("bedBreakProximity", 3.0);
     }
     
-    public void reloadConfig() {
-        plugin.reloadConfig();
-        loadConfig();
-    }
-    
-    // Getters
-    public int getMinPlayersToSpawn() { return minPlayersToSpawn; }
-    public int getMaxNPCsPerTeam() { return maxNPCsPerTeam; }
-    public int getCombatRadius() { return combatRadius; }
-    public int getBridgingRange() { return bridgingRange; }
-    public int getBedBreakProximity() { return bedBreakProximity; }
-    public List<BlockOffset> getBedDefenseTemplate() { return bedDefenseTemplate; }
-    public String getBedBrokenTitle() { return bedBrokenTitle; }
-    public String getBedBrokenSubtitle() { return bedBrokenSubtitle; }
-    
-    // Inner class for block offsets
-    public static class BlockOffset {
-        private final int x, y, z;
-        private final String type;
-        
-        public BlockOffset(int x, int y, int z, String type) {
-            this.x = x;
-            this.y = y;
-            this.z = z;
-            this.type = type;
-        }
-        
-        // Getters
-        public int getX() { return x; }
-        public int getY() { return y; }
-        public int getZ() { return z; }
-        public String getType() { return type; }
+    public int getStartDelay() {
+        return config.getInt("start-delay", 40);
     }
 }

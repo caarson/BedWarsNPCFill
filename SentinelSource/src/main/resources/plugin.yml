@@ -1,0 +1,122 @@
+name: Sentinel
+authors: ['mcmonkey']
+version: ${project.version} (build ${BUILD_NUMBER})
+main: org.mcmonkey.sentinel.SentinelPlugin
+depend: [Citizens]
+softdepend: [Vault, Sentry, CrackShot, Factions, Towny, SimpleClans, War]
+
+api-version: 1.13
+
+commands:
+  sentinel:
+    description: Lists Sentinel commands.
+    usage: /sentinel help
+    permission: sentinel.basic
+
+permissions:
+  sentinel.*:
+    description: Gives access to Sentinel commands.
+    default: op
+    children:
+      # /sentinel
+      sentinel.basic: true
+      # /sentinel addtarget TYPE
+      sentinel.addtarget: true
+      # /sentinel removetarget TYPE
+      sentinel.removetarget: true
+      # /sentinel addignore TYPE
+      sentinel.addignore: true
+      # /sentinel removeignore TYPE
+      sentinel.removeignore: true
+      # /sentinel addavoid TYPE
+      sentinel.addavoid: true
+      # /sentinel removeavoid TYPE
+      sentinel.removeavoid: true
+      # /sentinel range RANGE
+      sentinel.range: true
+      # /sentinel damage DAMAGE
+      sentinel.damage: true
+      # /sentinel weapondamage MATERIAL DAMAGE
+      sentinel.weapondamage: true
+      # /sentinel health HEALTH
+      sentinel.health: true
+      # /sentinel armor ARMOR
+      sentinel.armor: true
+      # /sentinel attackrate RATE
+      sentinel.attackrate: true
+      # /sentinel healrate RATE
+      sentinel.healrate: true
+      # /sentinel respawntime TIME
+      sentinel.chaserange: true
+      # /sentinel chaserange RANGE
+      sentinel.respawntime: true
+      # /sentinel guarddistance MINIMUM_DISTANCE [SELECTION_RANGE]
+      sentinel.guarddistance: true
+      # /sentinel guard PLAYER
+      sentinel.guard: true
+      # /sentinel invincible
+      sentinel.invincible: true
+      # /sentinel protected
+      sentinel.protected: true
+      # /sentinel protectfromrange
+      sentinel.protectfromrange: true
+      # /sentinel fightback
+      sentinel.fightback: true
+      # /sentinel runaway
+      sentinel.runaway: true
+      # /sentinel needammo
+      sentinel.needammo: true
+      # /sentinel safeshot
+      sentinel.safeshot: true
+      # /sentinel chaseclose, chaseranged
+      sentinel.chase: true
+      # /sentinel drops, /sentinel dropchance
+      sentinel.drops: true
+      # /sentinel deathxp
+      sentinel.deathxp: true
+      # /sentinel spawnpoint
+      sentinel.spawnpoint: true
+      # /sentinel forgive
+      sentinel.forgive: true
+      # /sentinel enemydrops
+      sentinel.enemydrops: true
+      # /sentinel kill
+      sentinel.kill: true
+      # /sentinel respawn
+      sentinel.respawn: true
+      # /sentinel sentryimport
+      sentinel.sentryimport: true
+      # /sentinel targettime TIME
+      sentinel.targettime: true
+      # /sentinel speed SPEED
+      sentinel.speed: true
+      # /sentinel autoswitch
+      sentinel.autoswitch: true
+      # /sentinel accuracy
+      sentinel.accuracy: true
+      # /sentinel squad SQUAD
+      sentinel.squad: true
+      # /sentinel realistic
+      sentinel.realistic: true
+      # /sentinel debug
+      sentinel.debug: true
+      # /sentinel reach REACH
+      sentinel.reach: true
+      # /sentinel projectilerange RANGE
+      sentinel.projectilerange: true
+      # /sentinel weaponredirect MATERIAL_ONE MATERIAL_TWO
+      sentinel.weaponredirect: true
+      # /sentinel greeting GREETING, sentinel warning WARNING, sentinel greetrange RANGE, sentinel greetrate RATE
+      sentinel.greet: true
+      # /sentinel info, /sentinel targets, /sentinel stats
+      sentinel.info: true
+      # /sentinel reload
+      sentinel.reload: true
+      # /sentinel avoidreturnpoint
+      sentinel.avoidreturnpoint: true
+      # /sentinel knockback
+      sentinel.knockback: true
+      # /sentinel wgregion
+      sentinel.wgregion: true
+      # Edit other people's NPCs
+      sentinel.admin: true

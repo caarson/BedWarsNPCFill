@@ -1,44 +1,56 @@
 package com.andrei1058.bedwarsnpcfill;
 
-import com.andrei1058.bedwars.api.BedWars;
-import com.andrei1058.bedwars.api.events.BedWarsTeamChangeEvent;
-import com.andrei1058.bedwars.api.events.BedWarsPlayerLeaveEvent;
-import org.bukkit.event.Listener;
+import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
-import org.bukkit.Location;
-import java.util.logging.Logger;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 
 public class GameListener implements Listener {
-    private final Logger logger = Logger.getLogger(GameListener.class.getName());
-    
-    @EventHandler
-    public void onBedWarsTeamChange(BedWarsTeamChangeEvent event) {
-        // Check if team is not full and needs NPC filling
-        if (event.getNewSize() < BedWars.MAX_PLAYERS_PER_TEAM) {
-            // Get NPC manager and spawn NPCs for this team
-            NPCManager npcManager = BedWarsNPCFillPlugin.getInstance().getNpcManager();
-            
-            // Get team spawn location (in real implementation, this would come from BedWars API)
-            // For now, we'll use a placeholder location
-            Location spawnLocation = new Location(event.getPlayer().getWorld(), 0, 0, 0);
-            
-            npcManager.spawnNPCsForTeam(
-                event.getTeamName(), 
-                spawnLocation, 
-                event.getNewSize()
-            );
+    private Object bedWarsAPI;
+
+    public GameListener() {
+        // Try to get BedWars API instance using reflection
+        try {
+            Class<?> bedWarsClass = Class.forName("com.andrei1058.bedwars.api.BedWars");
+            this.bedWarsAPI = Bukkit.getServicesManager().getRegistration(bedWarsClass).getProvider();
+            if (bedWarsAPI != null) {
+                Bukkit.getLogger().info("[BedWarsNPCFill] GameListener: BedWars API available via reflection");
+            } else {
+                Bukkit.getLogger().warning("[BedWarsNPCFill] GameListener: BedWars API not available yet");
+            }
+        } catch (Exception e) {
+            Bukkit.getLogger().warning("[BedWarsNPCFill] GameListener: Failed to get BedWars API: " + e.getMessage());
         }
     }
-    
+
     @EventHandler
-    public void onPlayerLeave(BedWarsPlayerLeaveEvent event) {
-        // When a player leaves, check if team needs NPCs
-        String teamName = event.getTeam().getName();
-        int currentPlayers = event.getTeam().getSize();
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        // This is a fallback listener - main functionality is in BedWarsEventListener
+        // Only log for debugging purposes
+        Player player = event.getPlayer();
+        Bukkit.getLogger().info("[BedWarsNPCFill] GameListener: Player " + player.getName() + " joined the server");
         
-        NPCManager npcManager = BedWarsNPCFillPlugin.getInstance().getNpcManager();
-        Location spawnLocation = new Location(event.getPlayer().getWorld(), 0, 0, 0);
-        
-        npcManager.spawnNPCsForTeam(teamName, spawnLocation, currentPlayers);
+        if (bedWarsAPI != null) {
+            try {
+                Object arenaUtil = bedWarsAPI.getClass().getMethod("getArenaUtil").invoke(bedWarsAPI);
+                Object arena = arenaUtil.getClass().getMethod("getArenaByPlayer", Player.class).invoke(arenaUtil, player);
+                if (arena != null) {
+                    String arenaName = (String) arena.getClass().getMethod("getArenaName").invoke(arena);
+                    Object status = arena.getClass().getMethod("getStatus").invoke(arena);
+                    Bukkit.getLogger().info("[BedWarsNPCFill] GameListener: Player " + player.getName() + " is in arena " + arenaName + " with status " + status);
+                }
+            } catch (Exception e) {
+                Bukkit.getLogger().warning("[BedWarsNPCFill] GameListener: Error checking arena for player " + player.getName() + ": " + e.getMessage());
+            }
+        }
+    }
+
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        // This is a fallback listener - main functionality is in BedWarsEventListener
+        Player player = event.getPlayer();
+        Bukkit.getLogger().info("[BedWarsNPCFill] GameListener: Player " + player.getName() + " left the server");
     }
 }

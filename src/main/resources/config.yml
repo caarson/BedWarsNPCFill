@@ -1,0 +1,30 @@
+# BedWars NPC Fill Configuration
+
+# When the number of real players in a team is below this threshold, NPCs will be spawned
+spawnThresholds: 2
+
+# Radius within which NPCs will target and attack real players
+combatRadius: 10.0
+
+# Range at which NPCs will start bridging towards players on other islands
+bridgingRange: 15.0
+
+# Proximity to enemy bed that triggers bed break simulation
+bedBreakProximity: 3.0
+
+# Delay in seconds before starting the game after a player joins
+startDelay: 40
+
+# Example bed defense template (relative positions to bed location)
+bedDefenseTemplate:
+  - [0, 0, 0, END_STONE]
+  - [1, 0, 0, END_STONE]
+  - [-1, 0, 0, END_STONE]
+  - [0, 0, 1, END_STONE]
+  - [0, 0, -1, END_STONE]
+  - [0, 1, 0, END_STONE]
+
+# Titles and messages
+titles:
+  bedBrokenTitle: "BED BROKEN"
+  bedBrokenSubtitle: "NPC has broken your bed"
