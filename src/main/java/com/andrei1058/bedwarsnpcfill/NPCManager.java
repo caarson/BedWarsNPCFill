@@ -134,29 +134,10 @@ public class NPCManager {
                 boolean containsPlayer = excludePlayer != null && members.contains(excludePlayer);
                 Bukkit.getLogger().info("[BedWarsNPCFill] DEBUG: Team " + teamName + " contains player " + (excludePlayer != null ? excludePlayer.getName() : "null") + ": " + containsPlayer);
                 
-                // For the player's team, we now allow NPCs to spawn as teammates
-                // Only skip if the team contains other real players besides the excludePlayer
+                // FIX: Never spawn NPCs on the player's team - prevent NPCs from spawning on player's plot
                 if (containsPlayer) {
-                    // Check if this is the player's team and if it has other real players
-                    if (excludeTeam != null && team.equals(excludeTeam)) {
-                        boolean hasOtherRealPlayers = false;
-                        for (Player member : members) {
-                            if (!CitizensAPI.getNPCRegistry().isNPC(member) && !member.equals(excludePlayer)) {
-                                hasOtherRealPlayers = true;
-                                break;
-                            }
-                        }
-                        if (hasOtherRealPlayers) {
-                            Bukkit.getLogger().info("[BedWarsNPCFill] DEBUG: Skipping NPC spawn for player's team " + teamName + " - has other real players");
-                            continue;
-                        } else {
-                            Bukkit.getLogger().info("[BedWarsNPCFill] DEBUG: Allowing NPC spawn for player's team " + teamName + " - only real player is excludePlayer");
-                        }
-                    } else {
-                        // For other teams, skip if they contain the excludePlayer (shouldn't happen, but safety)
-                        Bukkit.getLogger().info("[BedWarsNPCFill] DEBUG: Skipping NPC spawn for team " + teamName + " because it contains player " + excludePlayer.getName());
-                        continue;
-                    }
+                    Bukkit.getLogger().info("[BedWarsNPCFill] DEBUG: Skipping NPC spawn for player's team " + teamName + " - preventing NPCs on player's plot");
+                    continue;
                 }
                 
                 // This section has been removed as it's redundant with the previous check

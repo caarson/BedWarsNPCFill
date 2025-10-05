@@ -187,6 +187,9 @@ public class GameStarter {
                 @Override
                 public void run() {
                     NPCManager.startNPCCombat(arena);
+                    // Start the bed breaking system for NPCs
+                    BedBreakingSystem.startBedBreakingSystem();
+                    Bukkit.getLogger().info("[BedWarsNPCFill] Started NPC bed breaking system");
                 }
             }.runTaskLater(BedWarsNPCFillPlugin.getInstance(), 60L); // 60 ticks = 3 seconds delay
             

@@ -60,6 +60,14 @@ public class ConfigurationHandler {
     }
     
     public int getStartDelay() {
-        return config.getInt("start-delay", 40);
+        return config.getInt("startDelay", 40);
+    }
+    
+    public String getBedBrokenTitle() {
+        return config.getString("titles.bedBrokenTitle", "BED BROKEN");
+    }
+    
+    public String getBedBrokenSubtitle() {
+        return config.getString("titles.bedBrokenSubtitle", "NPC has broken your bed");
     }
 }
