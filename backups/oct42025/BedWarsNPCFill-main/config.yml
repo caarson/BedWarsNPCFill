@@ -1,0 +1,23 @@
+# BedWarsNPCFill Configuration
+
+# Spawn thresholds (when to spawn NPCs)
+spawnThresholds:
+  minPlayers: 1
+  maxNPCsPerTeam: 3
+  
+# Combat behavior
+combatRadius: 10
+bridgingRange: 20
+
+# Bed breaking proximity
+bedBreakProximity: 5
+
+# Bed defense template (relative block positions)
+bedDefenseTemplate:
+  - {x: 0, y: 0, z: 0, type: BED}
+  - {x: 1, y: 0, z: 0, type: PLANKS}
+  - {x: -1, y: 0, z: 0, type: PLANKS}
+
+titles:
+  bedBrokenTitle: "BED BROKEN"
+  bedBrokenSubtitle: "NPC has broken your bed"

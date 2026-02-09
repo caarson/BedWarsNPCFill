@@ -12,6 +12,22 @@ bridgingRange: 20
 # Bed breaking proximity
 bedBreakProximity: 5
 
+# NPC combat tuning
+npc:
+  # Minimum number of server ticks between melee attacks for NPCs (higher = slower attacks)
+  # 20 ticks = 1 second, 30 ticks = 1.5 seconds, 40 ticks = 2 seconds
+  attackRateTicks: 30
+  
+  # Damage dealt per attack (2.0 = 1 heart, 4.0 = 2 hearts)
+  attackDamage: 4.0
+  
+  # Movement speed multiplier for Sentinel AI (0.5 = half speed, 1.0 = normal)
+  movementSpeed: 0.5
+  
+  # Bridging movement speed - blocks moved per tick when bridging (lower = slower)
+  # 0.4 = slow, 0.8 = medium, 1.5 = fast
+  bridgingSpeed: 0.4
+
 # Bed defense template (relative block positions)
 bedDefenseTemplate:
   - {x: 0, y: 0, z: 0, type: BED}

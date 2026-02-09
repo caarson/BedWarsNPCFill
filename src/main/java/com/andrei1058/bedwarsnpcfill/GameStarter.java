@@ -342,7 +342,13 @@ public class GameStarter {
     private static void giveBedWarsStartingInventory(Arena arena) {
         try {
             Bukkit.getLogger().info("[BedWarsNPCFill] Attempting to give BedWars starting inventory");
-            
+
+            // If BedWars API is available, prefer the plugin's own item/shop setup and do not apply fallback items.
+            if (BedWars.getAPI() != null) {
+                Bukkit.getLogger().info("[BedWarsNPCFill] BedWars API detected - skipping manual starting inventory to avoid duplicates (let BedWars plugin handle items/shops)");
+                return;
+            }
+
             for (Player player : arena.getPlayers()) {
                 try {
                     Bukkit.getLogger().info("[BedWarsNPCFill] Giving inventory to player: " + player.getName());

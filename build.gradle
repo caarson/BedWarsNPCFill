@@ -5,6 +5,12 @@ plugins {
 group = 'com.andrei1058'
 version = '3.2.1'
 
+// Set Java version compatibility
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
 repositories {
     mavenCentral()
     maven { url = 'https://repo.extendedclip.com/content/repositories/placeholderapi/' }
@@ -45,6 +51,9 @@ sourceSets {
 jar {
     archiveBaseName = 'BedWarsNPCFill'
     destinationDirectory = file("$buildDir/libs")
+    
+    // Add timestamp to filename
+    archiveFileName = "${archiveBaseName.get()}-${version}-${new Date().format('yyyyMMdd-HHmmss')}.jar"
 }
 
 task runServer(type: Exec) {

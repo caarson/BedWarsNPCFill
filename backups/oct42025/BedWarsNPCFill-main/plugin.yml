@@ -1,0 +1,12 @@
+name: BedWarsNPCFill
+version: 3.2.1
+main: com.andrei1058.bedwarsnpcfill.BedWarsNPCFillPlugin
+dependencies:
+  - BedWars1058
+softdepend:
+  - Citizens
+  - Sentinel
+commands:
+  bedwarsnpcfill:
+    description: Main command for BedWarsNPCFill plugin
+    usage: /bedwarsnpcfill [test|start|cleannpcs]

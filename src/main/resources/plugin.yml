@@ -10,5 +10,5 @@ softdepend:
 commands:
   bedwarsnpcfill:
     description: BedWarsNPCFill commands
-    usage: /bedwarsnpcfill <test|start>
+    usage: /bedwarsnpcfill <test|start|forcestart|cleannpcs>
     aliases: [bwnpcfill, npcfill]

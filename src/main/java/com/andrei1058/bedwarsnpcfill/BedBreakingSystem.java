@@ -15,6 +15,8 @@ import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.Set;
 
 /**
@@ -24,6 +26,8 @@ public class BedBreakingSystem {
     
     private static BukkitRunnable bedBreakingTask;
     private static final Set<String> brokenBeds = new HashSet<>();
+    // Track when we last logged a world-mismatch for a given NPC+arena to avoid spamming the console
+    private static final Map<String, Long> worldMismatchLog = new HashMap<>();
     
     /**
      * Start the bed breaking system
@@ -109,10 +113,30 @@ public class BedBreakingSystem {
                 Location bedLocation = enemyTeam.getBed();
                 if (bedLocation == null) continue;
                 
+                // Ensure both locations are in the same world before measuring distance
+                if (npcLoc.getWorld() == null || bedLocation.getWorld() == null) {
+                    // Skip if either world is null (shouldn't happen normally)
+                    continue;
+                }
+
+                if (!npcLoc.getWorld().equals(bedLocation.getWorld())) {
+                    // Rate-limit identical warnings to once per 60 seconds per NPC+arena
+                    String logKey = npc.getName() + "@" + arena.getArenaName();
+                    long now = System.currentTimeMillis();
+                    long last = worldMismatchLog.getOrDefault(logKey, 0L);
+                    if (now - last > 60_000L) { // 60s
+                        Bukkit.getLogger().warning("[BedWarsNPCFill] Skipping distance check for NPC " + npc.getName()
+                                + " because NPC is in world '" + npcLoc.getWorld().getName() + "' while bed is in '"
+                                + bedLocation.getWorld().getName() + "' (arena: " + arena.getArenaName() + ").");
+                        worldMismatchLog.put(logKey, now);
+                    }
+                    continue;
+                }
+
                 // Check distance between NPC and enemy bed
                 double distance = npcLoc.distance(bedLocation);
                 double breakProximity = BedWarsNPCFillPlugin.getInstance().getConfigHandler().getBedBreakProximity();
-                
+
                 if (distance <= breakProximity) {
                     // NPC is within breaking proximity - break the bed
                     breakBed(npc, enemyTeam, bedLocation, arena);

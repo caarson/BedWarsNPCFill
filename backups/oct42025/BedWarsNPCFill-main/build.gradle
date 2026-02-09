@@ -1,0 +1,85 @@
+plugins {
+    id 'java'
+}
+
+group = 'com.andrei1058'
+version = '3.2.1'
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://repo.extendedclip.com/content/repositories/placeholderapi/' }
+    // Spigot repository for Bukkit
+    maven { url = 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/' }
+    // Citizens repository
+    maven { url = 'https://repo.citizensnpcs.co/' }
+    // Byteflux repository for libby-bukkit
+    maven { url = 'https://repo.byteflux.net/repository/maven-releases/' }
+}
+
+dependencies {
+    implementation 'org.bukkit:bukkit:1.8.8-R0.1-SNAPSHOT'
+    implementation 'me.clip:placeholderapi:2.11.5'
+    compileOnly 'org.projectlombok:lombok:1.18.30'
+    annotationProcessor 'org.projectlombok:lombok:1.18.30'
+    implementation ('net.citizensnpcs:citizens-main:2.0.32-SNAPSHOT') {
+        exclude group: 'net.byteflux', module: 'libby-bukkit'
+    }
+    implementation files('libs/libby-bukkit-1.1.5.jar')
+    // Sentinel API for NPC combat - marked as compileOnly since it should be provided by the server
+    compileOnly files('SentinelSource/Sentinel-2.9.2-SNAPSHOT-b527.jar')
+    // BedWars1058 API
+    compileOnly files('bedwars1058-bedwars-plugin-23.2.1.jar')
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src/main/java']
+        }
+        resources {
+            srcDirs = ['src/main/resources']
+        }
+    }
+}
+
+jar {
+    archiveBaseName = 'BedWarsNPCFill'
+    destinationDirectory = file("$buildDir/libs")
+}
+
+task runServer(type: Exec) {
+    dependsOn build
+    workingDir 'run'
+    commandLine 'cmd', '/c', 'start', 'run.bat'
+    
+    doFirst {
+        // Create run directory if it doesn't exist
+        def runDir = file('run')
+        if (!runDir.exists()) {
+            runDir.mkdirs()
+        }
+        
+        // Create batch file to download and run server
+        new File(runDir, 'run.bat').text = '''
+@echo off
+if not exist paper.jar (
+    echo Downloading PaperMC...
+    powershell -Command "Invoke-WebRequest -Uri 'https://cdn.papermc.io/artifacts/paper/1.20.4/latest/paper-1.20.4-latest.jar' -OutFile 'paper.jar'"
+)
+echo Starting server...
+java -jar paper.jar
+pause
+'''
+        
+        // Copy plugin and config files
+        copy {
+            from jar
+            into "run/plugins"
+        }
+        copy {
+            from 'src/main/resources/'
+            include '*.yml'
+            into "run/plugins/BedWarsNPCFill"
+        }
+    }
+}

@@ -55,12 +55,48 @@ public class ConfigurationHandler {
         return config.getDouble("bridgingRange", 15.0);
     }
 
+    public long getBridgingPlaceCooldownMs() {
+        return config.getLong("bridging.placeCooldownMs", 500L);
+    }
+
+    public long getBridgingStuckThresholdMs() {
+        return config.getLong("bridging.stuckThresholdMs", 5000L);
+    }
+
+    public boolean isPreemptiveBridgingEnabled() {
+        return config.getBoolean("bridging.preemptive", true);
+    }
+
+    public long getBridgingTickIntervalTicks() {
+        return config.getLong("bridging.tickIntervalTicks", 6L);
+    }
+
     public double getBedBreakProximity() {
         return config.getDouble("bedBreakProximity", 3.0);
     }
     
     public int getStartDelay() {
         return config.getInt("startDelay", 40);
+    }
+
+    public int getNPCAttackRateTicks() {
+        // default 30 ticks (1.5 seconds) between attacks
+        return config.getInt("npc.attackRateTicks", 30);
+    }
+    
+    public double getNPCAttackDamage() {
+        // default 4.0 damage per hit (2 hearts)
+        return config.getDouble("npc.attackDamage", 4.0);
+    }
+    
+    public double getNPCMovementSpeed() {
+        // default 0.5 (half speed)
+        return config.getDouble("npc.movementSpeed", 0.5);
+    }
+    
+    public double getNPCBridgingSpeed() {
+        // default 0.4 blocks per tick during bridging
+        return config.getDouble("npc.bridgingSpeed", 0.4);
     }
     
     public String getBedBrokenTitle() {

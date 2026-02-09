@@ -1,5 +1,6 @@
 package com.andrei1058.bedwarsnpcfill;
 
+import com.andrei1058.bedwars.api.arena.GameState;
 import com.andrei1058.bedwars.api.arena.IArena;
 import com.andrei1058.bedwars.arena.Arena;
 import net.citizensnpcs.api.CitizensAPI;
@@ -28,35 +29,73 @@ public class ArenaScheduler {
 
             @Override
             public void run() {
-                if (countdown > 0) {
-                    // Update countdown message
-                    initialPlayer.sendMessage("§a[BedWarsNPCFill] §eGame starting with NPCs in " + countdown + " seconds...");
-                    countdown--;
-                } else {
-                    // Time's up - fill with NPCs after a 5-tick delay to ensure player team assignment
-                    new BukkitRunnable() {
-                        @Override
-                        public void run() {
-                            fillArenaWithNPCs(arenaName, initialPlayer);
-                            
-                            // Start game after 2 seconds to allow NPCs to initialize
-                            new BukkitRunnable() {
-                                @Override
-                                public void run() {
-                                    startGame(arenaName, initialPlayer);
-                                }
-                            }.runTaskLater(BedWarsNPCFillPlugin.getInstance(), 40L); // 2 seconds (20 ticks/sec * 2)
-                        }
-                    }.runTaskLater(BedWarsNPCFillPlugin.getInstance(), 5L); // 0.25 second delay for team assignment
-                    
-                    this.cancel();
-                    arenaTimers.remove(arenaName);
+                IArena arena = Arena.getArenaByName(arenaName);
+                if (arena == null) {
+                    cancelCountdown(arenaName, this, "arena not found");
+                    return;
                 }
+
+                if (arena.getStatus() != GameState.waiting) {
+                    cancelCountdown(arenaName, this, "arena no longer waiting");
+                    return;
+                }
+
+                if (arena.getPlayers().isEmpty()) {
+                    cancelCountdown(arenaName, this, "arena empty");
+                    return;
+                }
+
+                Player anchor = initialPlayer;
+                if (anchor == null || !arena.getPlayers().contains(anchor)) {
+                    anchor = arena.getPlayers().get(0);
+                }
+
+                if (countdown > 0) {
+                    for (Player player : arena.getPlayers()) {
+                        player.sendMessage("§a[BedWarsNPCFill] §eGame starting with NPCs in " + countdown + " seconds...");
+                    }
+                    countdown--;
+                    return;
+                }
+
+                if (anchor == null) {
+                    cancelCountdown(arenaName, this, "no anchor player available");
+                    return;
+                }
+                triggerFillAndStart(arenaName, anchor);
+                cancelCountdown(arenaName, this, "countdown finished");
             }
         }.runTaskTimer(BedWarsNPCFillPlugin.getInstance(), 0L, 20L).getTaskId();
 
         arenaTimers.put(arenaName, taskId);
         Bukkit.getLogger().info("[BedWarsNPCFill] Started 40s timer for arena: " + arenaName);
+    }
+
+    public static String forceStartNow(String arenaName, Player initialPlayer) {
+        IArena arena = Arena.getArenaByName(arenaName);
+        if (arena == null) {
+            return "Arena not found.";
+        }
+        if (arena.getStatus() != GameState.waiting) {
+            return "Arena must be in waiting state (currently " + arena.getStatus() + ").";
+        }
+        if (arena.getPlayers().isEmpty()) {
+            return "Arena does not have any players.";
+        }
+
+        Player anchor = initialPlayer;
+        if (anchor == null || !arena.getPlayers().contains(anchor)) {
+            anchor = arena.getPlayers().get(0);
+        }
+
+        if (anchor == null) {
+            return "Could not determine an anchor player to seed NPCs.";
+        }
+
+        cancelArenaTimer(arenaName);
+        triggerFillAndStart(arenaName, anchor);
+        Bukkit.getLogger().info("[BedWarsNPCFill] Force-start triggered for arena " + arenaName + " by " + (initialPlayer != null ? initialPlayer.getName() : "system"));
+        return null;
     }
 
     private static void fillArenaWithNPCs(String arenaName, Player initialPlayer) {
@@ -75,6 +114,24 @@ public class ArenaScheduler {
         }
     }
 
+    private static void triggerFillAndStart(String arenaName, Player anchor) {
+        Player finalAnchor = anchor;
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                fillArenaWithNPCs(arenaName, finalAnchor);
+
+                // Start game after 2 seconds to allow NPCs to initialize
+                new BukkitRunnable() {
+                    @Override
+                    public void run() {
+                        startGame(arenaName, finalAnchor);
+                    }
+                }.runTaskLater(BedWarsNPCFillPlugin.getInstance(), 40L);
+            }
+        }.runTaskLater(BedWarsNPCFillPlugin.getInstance(), 5L);
+    }
+
     private static void startGame(String arenaName, Player player) {
         player.sendMessage("§a[BedWarsNPCFill] §eStarting game with NPC opponents!");
         Bukkit.getLogger().info("[BedWarsNPCFill] Starting game for arena: " + arenaName);
@@ -89,5 +146,11 @@ public class ArenaScheduler {
             arenaTimers.remove(arenaName);
             Bukkit.getLogger().info("[BedWarsNPCFill] Canceled timer for arena: " + arenaName);
         }
+    }
+
+    private static void cancelCountdown(String arenaName, BukkitRunnable task, String reason) {
+        task.cancel();
+        arenaTimers.remove(arenaName);
+        Bukkit.getLogger().info("[BedWarsNPCFill] Countdown for arena " + arenaName + " stopped: " + reason);
     }
 }

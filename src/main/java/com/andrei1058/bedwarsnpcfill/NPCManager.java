@@ -6,7 +6,6 @@ import com.andrei1058.bedwars.api.arena.IArena;
 import com.andrei1058.bedwars.api.arena.team.ITeam;
 import com.andrei1058.bedwars.arena.Arena;
 import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
 import net.citizensnpcs.api.CitizensAPI;
 import net.citizensnpcs.api.npc.NPC;
 import net.citizensnpcs.api.event.SpawnReason;
@@ -25,10 +24,28 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 public class NPCManager {
+    private static final String NPC_DATA_KEY = "bedwarsnpcfill.created";
     private static final Map<String, List<NPC>> arenaNPCs = new HashMap<>();
     private static final Map<String, Player> arenaExcludePlayers = new HashMap<>();
+    private static final Map<UUID, String> npcArenaAssignments = new HashMap<>();
+
+    private static String resolveArenaKey(String arenaName) {
+        if (arenaName == null || arenaNPCs.isEmpty()) {
+            return null;
+        }
+        if (arenaNPCs.containsKey(arenaName)) {
+            return arenaName;
+        }
+        for (String existing : arenaNPCs.keySet()) {
+            if (existing.equalsIgnoreCase(arenaName)) {
+                return existing;
+            }
+        }
+        return null;
+    }
     
     /**
      * Spawn NPCs for an arena and assign them to all teams that don't have real players
@@ -43,6 +60,7 @@ public class NPCManager {
                 Bukkit.getLogger().severe("[BedWarsNPCFill] Could not find arena: " + arenaName);
                 return;
             }
+            String canonicalArenaName = arena.getArenaName();
             
             // Only add NPCs when arena is in waiting state
             if (arena.getStatus() != com.andrei1058.bedwars.api.arena.GameState.waiting) {
@@ -51,14 +69,14 @@ public class NPCManager {
             }
             
             // Clear existing NPCs for this arena
-            removeNPCs(arenaName);
+            removeNPCs(canonicalArenaName);
             
             // Store exclude player for this arena
             if (excludePlayer != null) {
-                arenaExcludePlayers.put(arenaName, excludePlayer);
-                Bukkit.getLogger().info("[BedWarsNPCFill] Stored exclude player for arena " + arenaName + ": " + excludePlayer.getName());
+                arenaExcludePlayers.put(canonicalArenaName, excludePlayer);
+                Bukkit.getLogger().info("[BedWarsNPCFill] Stored exclude player for arena " + canonicalArenaName + ": " + excludePlayer.getName());
             } else {
-                arenaExcludePlayers.remove(arenaName);
+                arenaExcludePlayers.remove(canonicalArenaName);
             }
             
             // Ensure excludePlayer is assigned to a team if not already
@@ -83,12 +101,12 @@ public class NPCManager {
             }
             
             List<NPC> npcs = new ArrayList<>();
-            arenaNPCs.put(arenaName, npcs);
+            arenaNPCs.put(canonicalArenaName, npcs);
             
             int npcCount = 0;
             int teamCount = arena.getTeams().size();
             
-            Bukkit.getLogger().info("[BedWarsNPCFill] Checking " + teamCount + " teams for NPC spawning in arena: " + arenaName);
+            Bukkit.getLogger().info("[BedWarsNPCFill] Checking " + teamCount + " teams for NPC spawning in arena: " + canonicalArenaName);
             
             // Get the team to exclude (if excludePlayer is provided and in a team)
             ITeam excludeTeam = null;
@@ -130,28 +148,67 @@ public class NPCManager {
                 }
                 Bukkit.getLogger().info("[BedWarsNPCFill] DEBUG: Team " + teamName + " members: " + debugMemberInfo.toString());
                 
-                // Check if this team contains the excludePlayer
-                boolean containsPlayer = excludePlayer != null && members.contains(excludePlayer);
-                Bukkit.getLogger().info("[BedWarsNPCFill] DEBUG: Team " + teamName + " contains player " + (excludePlayer != null ? excludePlayer.getName() : "null") + ": " + containsPlayer);
-                
-                // FIX: Never spawn NPCs on the player's team - prevent NPCs from spawning on player's plot
-                if (containsPlayer) {
-                    Bukkit.getLogger().info("[BedWarsNPCFill] DEBUG: Skipping NPC spawn for player's team " + teamName + " - preventing NPCs on player's plot");
+                // Determine whether this team already has any human (non-NPC) members.
+                boolean hasHumanMember = false;
+                for (Player member : members) {
+                    if (!CitizensAPI.getNPCRegistry().isNPC(member)) {
+                        hasHumanMember = true;
+                        break;
+                    }
+                }
+
+                Location teamSpawn = team.getSpawn();
+
+                // Skip spawning when the team already has a human player or when it's the player's own team.
+                boolean skipTeam = hasHumanMember;
+                if (!skipTeam && excludeTeam != null) {
+                    try {
+                        skipTeam = team.getName().equals(excludeTeam.getName());
+                    } catch (Exception e) {
+                        // Leave skipTeam unchanged if comparison fails.
+                    }
+                } else if (!skipTeam && excludePlayer != null) {
+                    skipTeam = members.contains(excludePlayer);
+                }
+
+                // As an extra safeguard, skip teams whose spawn is very close to the exclude player's current location.
+                if (!skipTeam && excludePlayer != null && teamSpawn != null) {
+                    Location playerLoc = excludePlayer.getLocation();
+                    if (playerLoc != null && playerLoc.getWorld() != null && teamSpawn.getWorld() != null && playerLoc.getWorld().equals(teamSpawn.getWorld())) {
+                        double distanceSq = playerLoc.distanceSquared(teamSpawn);
+                        // Treat any spawn within ~9 blocks as belonging to the player's island.
+                        if (distanceSq <= 81) {
+                            skipTeam = true;
+                            Bukkit.getLogger().info("[BedWarsNPCFill] DEBUG: Skipping NPC spawn for team " + teamName + " because spawn is near player " + excludePlayer.getName() + " (distanceSq=" + distanceSq + ")");
+                        }
+                    }
+                }
+
+                Bukkit.getLogger().info("[BedWarsNPCFill] DEBUG: Team " + teamName + " hasHuman=" + hasHumanMember + ", skipTeam=" + skipTeam + " (excludeTeam=" + (excludeTeam != null ? excludeTeam.getName() : "null") + ", teamSpawn=" + teamSpawn + ")");
+
+                if (skipTeam) {
+                    if (hasHumanMember) {
+                        Bukkit.getLogger().info("[BedWarsNPCFill] DEBUG: Skipping NPC spawn for team " + teamName + " because it already has human players");
+                    } else {
+                        Bukkit.getLogger().info("[BedWarsNPCFill] DEBUG: Skipping NPC spawn for team " + teamName + " due to proximity to player " + (excludePlayer != null ? excludePlayer.getName() : "unknown"));
+                    }
                     continue;
                 }
-                
-                // This section has been removed as it's redundant with the previous check
-                // The previous check already handles team membership correctly
-                
-                Location teamSpawn = team.getSpawn();
                 
                 Bukkit.getLogger().info("[BedWarsNPCFill] Team " + teamName + " has no real players. Creating NPC at spawn: " + teamSpawn);
                 
                 // Create NPC
                 NPC npc = CitizensAPI.getNPCRegistry().createNPC(
                     org.bukkit.entity.EntityType.PLAYER, 
-                    "NPC_" + arenaName + "_" + teamName
+                    "NPC_" + canonicalArenaName + "_" + teamName
                 );
+
+                // Mark NPC as being created by this plugin for future identification/cleanup
+                try {
+                    npc.data().setPersistent(NPC_DATA_KEY, true);
+                } catch (Exception dataEx) {
+                    Bukkit.getLogger().warning("[BedWarsNPCFill] Could not mark NPC " + npc.getName() + " with plugin metadata: " + dataEx.getMessage());
+                }
                 
                 // Spawn NPC at team's spawn location
                 npc.spawn(teamSpawn);
@@ -162,10 +219,14 @@ public class NPCManager {
                 
                 // Configure Sentinel AI in PASSIVE mode initially to prevent early attacks
                 configureSentinelAI(npc, teamName, arena, excludePlayer, false);
+                // Bukkit.getLogger().info("[BedWarsNPCFill] Sentinel AI configuration skipped for " + npc.getName() + " (using NPCBridgingSystem)");
                 
                 // Simulate player join for BedWars, passing excludePlayer for safety check
-                simulatePlayerJoin(npc, arenaName, teamName, excludePlayer);
+                simulatePlayerJoin(npc, canonicalArenaName, teamName, excludePlayer);
                 
+                // Track arena assignment for quick lookups during combat routines
+                npcArenaAssignments.put(npc.getUniqueId(), canonicalArenaName);
+
                 // Add NPC to custom bridging system
                 NPCBridgingSystem.addNPCToBridging(npc);
                 
@@ -297,11 +358,22 @@ public class NPCManager {
      * @param arenaName The name of the arena
      */
     public static void removeNPCs(String arenaName) {
-        if (arenaNPCs.containsKey(arenaName)) {
-            for (NPC npc : arenaNPCs.get(arenaName)) {
+        String key = resolveArenaKey(arenaName);
+        if (key == null) {
+            Bukkit.getLogger().info("[BedWarsNPCFill] No tracked NPCs found for arena " + arenaName + " during removal");
+            return;
+        }
+        if (arenaNPCs.containsKey(key)) {
+            for (NPC npc : arenaNPCs.get(key)) {
+                try {
+                    NPCBridgingSystem.removeNPCFromBridging(npc);
+                } catch (Exception ignore) {
+                    // Bridging cleanup is best-effort and should not block NPC destruction.
+                }
+                npcArenaAssignments.remove(npc.getUniqueId());
                 npc.destroy();
             }
-            arenaNPCs.remove(arenaName);
+            arenaNPCs.remove(key);
         }
     }
     
@@ -311,24 +383,59 @@ public class NPCManager {
      */
     public static void removeAllNPCs() {
         int removedCount = 0;
-        // First, remove all NPCs from our internal tracking
+
+        // Remove NPCs tracked internally (these are ours by definition)
         for (List<NPC> npcs : arenaNPCs.values()) {
-            for (NPC npc : npcs) {
-                npc.destroy();
-                removedCount++;
+            // Use snapshot to avoid concurrent modification if destroy() alters list contents
+            java.util.List<NPC> snapshot = new java.util.ArrayList<>(npcs);
+            for (NPC npc : snapshot) {
+                if (npc == null) {
+                    continue;
+                }
+                try {
+                    NPCBridgingSystem.removeNPCFromBridging(npc);
+                    npcArenaAssignments.remove(npc.getUniqueId());
+                    npc.destroy();
+                    removedCount++;
+                } catch (Exception destroyEx) {
+                    Bukkit.getLogger().warning("[BedWarsNPCFill] Failed to destroy tracked NPC " + npc.getName() + ": " + destroyEx.getMessage());
+                }
             }
         }
         arenaNPCs.clear();
-        
-        // Additionally, scan all NPCs in the registry and remove any that match our naming pattern
-        // This ensures we catch any NPCs that might not be in our map (e.g., from previous sessions)
-        for (NPC npc : CitizensAPI.getNPCRegistry()) {
-            if (npc.getName().startsWith("NPC_")) {
+
+        // Safely access Citizens registry
+        if (!Bukkit.getPluginManager().isPluginEnabled("Citizens")) {
+            Bukkit.getLogger().warning("[BedWarsNPCFill] Citizens plugin not enabled; could not scan registry for NPC cleanup");
+            Bukkit.getLogger().info("[BedWarsNPCFill] Removed " + removedCount + " tracked NPCs");
+            return;
+        }
+
+        net.citizensnpcs.api.npc.NPCRegistry registry = CitizensAPI.getNPCRegistry();
+        if (registry == null) {
+            Bukkit.getLogger().warning("[BedWarsNPCFill] Citizens NPC registry unavailable; only removed tracked NPCs");
+            Bukkit.getLogger().info("[BedWarsNPCFill] Removed " + removedCount + " tracked NPCs");
+            return;
+        }
+
+        java.util.List<NPC> registrySnapshot = new java.util.ArrayList<>();
+        for (NPC npc : registry) {
+            registrySnapshot.add(npc);
+        }
+        for (NPC npc : registrySnapshot) {
+            if (!isPluginNPC(npc)) {
+                continue;
+            }
+            try {
+                NPCBridgingSystem.removeNPCFromBridging(npc);
+                npcArenaAssignments.remove(npc.getUniqueId());
                 npc.destroy();
                 removedCount++;
+            } catch (Exception destroyEx) {
+                Bukkit.getLogger().warning("[BedWarsNPCFill] Failed to destroy NPC " + npc.getName() + ": " + destroyEx.getMessage());
             }
         }
-        
+
         Bukkit.getLogger().info("[BedWarsNPCFill] Removed " + removedCount + " plugin-created NPCs");
     }
     
@@ -360,12 +467,13 @@ public class NPCManager {
             }
 
             String arenaName = arena.getArenaName();
-            if (!arenaNPCs.containsKey(arenaName)) {
+            String arenaKey = resolveArenaKey(arenaName);
+            if (arenaKey == null) {
                 Bukkit.getLogger().info("[BedWarsNPCFill] No NPCs found for arena: " + arenaName);
                 return;
             }
 
-            List<NPC> npcs = arenaNPCs.get(arenaName);
+            List<NPC> npcs = arenaNPCs.get(arenaKey);
             Bukkit.getLogger().info("[BedWarsNPCFill] Teleporting " + npcs.size() + " NPCs to their islands");
 
             for (NPC npc : npcs) {
@@ -375,7 +483,7 @@ public class NPCManager {
                     String[] parts = npcName.split("_");
                     if (parts.length >= 3) {
                         String teamName = parts[2]; // team name is the third part
-                        
+
                         // Find the team
                         ITeam team = arena.getTeam(teamName);
                         if (team != null) {
@@ -392,12 +500,51 @@ public class NPCManager {
                     Bukkit.getLogger().warning("[BedWarsNPCFill] Error teleporting NPC " + npc.getName() + ": " + e.getMessage());
                 }
             }
-            
+
             Bukkit.getLogger().info("[BedWarsNPCFill] NPC teleportation complete");
-            
+
         } catch (Exception e) {
             Bukkit.getLogger().severe("[BedWarsNPCFill] Error in NPC teleportation: " + e.getMessage());
         }
+    }
+
+    /*
+    public static String extractTeamNameFromNPC(NPC npc) {
+        if (npc == null) {
+            return "";
+        }
+        String npcName = npc.getName();
+        String[] parts = npcName.split("_");
+        if (parts.length >= 3) {
+            return parts[2]; // team name is the third part
+        }
+        return "";
+    }
+    */
+
+    public static IArena getAssignedArena(NPC npc) {
+        if (npc == null) {
+            return null;
+        }
+        String arenaName = npcArenaAssignments.get(npc.getUniqueId());
+        if (arenaName == null) {
+            return null;
+        }
+        return Arena.getArenaByName(arenaName);
+    }
+
+    public static Player getExcludePlayer(String arenaName) {
+        if (arenaName == null) {
+            return null;
+        }
+        if (arenaExcludePlayers.containsKey(arenaName)) {
+            return arenaExcludePlayers.get(arenaName);
+        }
+        String arenaKey = resolveArenaKey(arenaName);
+        if (arenaKey != null) {
+            return arenaExcludePlayers.get(arenaKey);
+        }
+        return null;
     }
 
     /**
@@ -416,9 +563,9 @@ public class NPCManager {
             // Add Sentinel trait to NPC
             SentinelTrait sentinel = npc.getOrAddTrait(SentinelTrait.class);
             
-            // Basic settings
+            // Basic settings - use configurable damage
             sentinel.health = 20.0; // Full health
-            sentinel.damage = 4.0; // Standard player damage
+            sentinel.damage = BedWarsNPCFillPlugin.getInstance().getConfigHandler().getNPCAttackDamage();
             
             // Get the exact scoreboard team name for proper team matching
             Scoreboard scoreboard = Bukkit.getScoreboardManager().getMainScoreboard();
@@ -479,10 +626,12 @@ public class NPCManager {
             Bukkit.getLogger().info("[BedWarsNPCFill] Setting ignore for NPC " + npc.getName() + " on team: " + actualTeamName);
             
             if (enableCombat) {
-                // Combat-specific settings
-                sentinel.attackRate = 10; // Attack every 10 ticks (0.5 seconds)
-                sentinel.range = 50.0; // Detection range within 50 blocks
-                sentinel.chaseRange = 50.0; // Chase players within 50 blocks
+                // Combat-specific settings - SLOWED DOWN
+                int attackRateTicks = BedWarsNPCFillPlugin.getInstance().getConfigHandler().getNPCAttackRateTicks();
+                sentinel.attackRate = attackRateTicks; // Attack rate from config (default 20 ticks = 1 second)
+                sentinel.range = 100.0; // Detection range within 100 blocks
+                sentinel.chaseRange = 100.0; // Chase players within 100 blocks
+                sentinel.realistic = false; // Allow targeting through walls/void
                 
                 // Targeting settings - target all players not on the same team
                 sentinel.addTarget("players");
@@ -506,19 +655,25 @@ public class NPCManager {
                 }
                 
                 // Combat behavior - make NPCs aggressive but disable fightback for friendly NPCs
-                sentinel.closeChase = true; // Chase targets in melee range
-                sentinel.rangedChase = false; // Don't chase when using ranged weapons
+                sentinel.closeChase = false; // Don't let Sentinel control movement — Navigator handles it
+                sentinel.rangedChase = false; // Don't let Sentinel control movement
                 sentinel.fightback = !isFriendly; // Only fight back if not friendly
                 sentinel.ignoreLOS = true; // Don't require line of sight for better detection
                 
+                // Movement is handled by NPCBridgingSystem via direct velocity.
+                // Sentinel handles ONLY combat (damage dealing), NOT movement.
+                // Setting chaseRange to 0 prevents Sentinel from trying to move the NPC.
+                sentinel.chaseRange = 0; // Disable Sentinel movement — velocity handles it
+                Bukkit.getLogger().info("[BedWarsNPCFill] Movement handled by direct velocity (NPCBridgingSystem) for " + npc.getName());
+
                 // Log the fightback setting for debugging
                 Bukkit.getLogger().info("[BedWarsNPCFill] NPC " + npc.getName() + " fightback setting: " + sentinel.fightback + " (isFriendly: " + isFriendly + ")");
                 
                 // Bed breaking simulation - target beds specifically
                 sentinel.addTarget("block:bed");
                 
-                // Movement and pathfinding
-                sentinel.speed = 1.0; // Normal movement speed
+                // Movement and pathfinding - speed handled by Citizens Navigator, not Sentinel
+                sentinel.speed = 1.0; // Default speed — actual movement speed set via Navigator params
                 sentinel.reach = 3.0; // Attack reach distance
                 
                 // Debug: Log current ignores and targets
@@ -587,26 +742,34 @@ public class NPCManager {
             Class.forName("org.mcmonkey.sentinel.SentinelTrait");
             
             String arenaName = arena.getArenaName();
-            if (!arenaNPCs.containsKey(arenaName)) {
+            String arenaKey = resolveArenaKey(arenaName);
+            if (arenaKey == null) {
+                Bukkit.getLogger().warning("[BedWarsNPCFill] No tracked NPCs found for arena " + arenaName + " when attempting to start combat. Known arenas: " + arenaNPCs.keySet());
                 return;
             }
 
-            List<NPC> npcs = arenaNPCs.get(arenaName);
+            List<NPC> npcs = arenaNPCs.get(arenaKey);
             Bukkit.getLogger().info("[BedWarsNPCFill] Starting combat behavior for " + npcs.size() + " NPCs in arena " + arenaName);
 
             // Start the custom bridging system for all NPCs
             NPCBridgingSystem.startBridgingSystem();
             
+            // Start debug task to monitor NPC states
+            startDebugTask();
+            
             for (NPC npc : npcs) {
                 try {
-                    SentinelTrait sentinel = npc.getOrAddTrait(SentinelTrait.class);
+                    // SentinelTrait sentinel = npc.getOrAddTrait(SentinelTrait.class);
                     // Get the exclude player for this arena if available
-                    Player excludePlayer = arenaExcludePlayers.get(arenaName);
-                    Bukkit.getLogger().info("[BedWarsNPCFill] Configuring Sentinel AI for NPC " + npc.getName() + " with excludePlayer: " + (excludePlayer != null ? excludePlayer.getName() : "null"));
+                    Player excludePlayer = arenaExcludePlayers.get(arenaKey);
+                    Bukkit.getLogger().info("[BedWarsNPCFill] Configuring NPC " + npc.getName() + " with excludePlayer: " + (excludePlayer != null ? excludePlayer.getName() : "null"));
                     // Configure Sentinel AI with team-specific settings and arena context, passing excludePlayer
                     configureSentinelAI(npc, extractTeamNameFromNPC(npc), arena, excludePlayer);
                     
-                    Bukkit.getLogger().info("[BedWarsNPCFill] Started combat for NPC " + npc.getName());
+                    // Add to bridging system
+                    NPCBridgingSystem.addNPCToBridging(npc);
+                    
+                    Bukkit.getLogger().info("[BedWarsNPCFill] Started combat (BridgingSystem) for NPC " + npc.getName());
                 } catch (Exception e) {
                     Bukkit.getLogger().warning("[BedWarsNPCFill] Error starting combat for NPC " + npc.getName() + ": " + e.getMessage());
                 }
@@ -616,6 +779,26 @@ public class NPCManager {
         } catch (Exception e) {
             Bukkit.getLogger().severe("[BedWarsNPCFill] Error starting NPC combat: " + e.getMessage());
         }
+    }
+
+    /**
+     * Determine if the given NPC was created by this plugin. We treat any Citizens NPC whose
+     * name begins with the "NPC" prefix (case-insensitive) as belonging to the plugin.
+     */
+    public static boolean isPluginNPC(NPC npc) {
+        if (npc == null) {
+            return false;
+        }
+
+        try {
+            if (npc.data().has(NPC_DATA_KEY) && npc.data().get(NPC_DATA_KEY) instanceof Boolean) {
+                return Boolean.TRUE.equals(npc.data().get(NPC_DATA_KEY));
+            }
+        } catch (Exception dataEx) {
+            Bukkit.getLogger().warning("[BedWarsNPCFill] Failed to read plugin metadata for NPC " + npc.getName() + ": " + dataEx.getMessage());
+        }
+
+        return false;
     }
 
     /**
@@ -630,5 +813,42 @@ public class NPCManager {
             return parts[2]; // team name is the third part
         }
         return "";
+    }
+
+    private static void startDebugTask() {
+        new org.bukkit.scheduler.BukkitRunnable() {
+            @Override
+            public void run() {
+                for (List<NPC> npcs : arenaNPCs.values()) {
+                    for (NPC npc : npcs) {
+                        if (npc == null || !npc.isSpawned()) continue;
+                        
+                        StringBuilder debug = new StringBuilder();
+                        debug.append("DEBUG NPC ").append(npc.getName()).append(": ");
+                        
+                        // Check Sentinel status
+                        if (npc.hasTrait(SentinelTrait.class)) {
+                            SentinelTrait sentinel = npc.getTrait(SentinelTrait.class);
+                            org.bukkit.entity.LivingEntity target = sentinel.chasing;
+                            debug.append("Chasing=").append(target != null ? target.getName() : "null").append(", ");
+                            if (sentinel.getLivingEntity() != null) {
+                                debug.append("Health=").append(sentinel.getLivingEntity().getHealth()).append(", ");
+                            }
+                        } else {
+                            debug.append("No Sentinel Trait, ");
+                        }
+                        
+                        // Log movement info (teleport-based movement via NPCBridgingSystem)
+                        if (npc.isSpawned() && npc.getEntity() != null) {
+                            Location loc = npc.getEntity().getLocation();
+                            debug.append("Loc=").append(String.format("%.1f,%.1f,%.1f", loc.getX(), loc.getY(), loc.getZ())).append(", ");
+                            debug.append("OnGround=").append(loc.clone().add(0, -0.1, 0).getBlock().getType().isSolid());
+                        }
+                        
+                        Bukkit.getLogger().info("[BedWarsNPCFill] " + debug.toString());
+                    }
+                }
+            }
+        }.runTaskTimer(BedWarsNPCFillPlugin.getInstance(), 20L, 100L); // Run every 5 seconds
     }
 }

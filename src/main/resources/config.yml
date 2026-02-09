@@ -15,6 +15,33 @@ bedBreakProximity: 3.0
 # Delay in seconds before starting the game after a player joins
 startDelay: 40
 
+# NPC combat tuning
+npc:
+  # Minimum number of server ticks between melee attacks for NPCs (higher = slower attacks)
+  # 20 ticks = 1 second, 30 ticks = 1.5 seconds, 40 ticks = 2 seconds
+  attackRateTicks: 30
+  
+  # Damage dealt per attack (2.0 = 1 heart, 4.0 = 2 hearts)
+  attackDamage: 4.0
+  
+  # Movement speed multiplier for Sentinel AI (0.5 = half speed, 1.0 = normal)
+  movementSpeed: 0.5
+  
+  # Bridging movement speed - blocks moved per tick when bridging (lower = slower)
+  # 0.4 = slow, 0.8 = medium, 1.5 = fast
+  bridgingSpeed: 0.4
+
+# NPC bridging tuning
+bridging:
+  # Minimum milliseconds between block placements for a single NPC (throttle placements to avoid spam)
+  placeCooldownMs: 500
+  # Milliseconds of near-stationary time after which an NPC is considered stuck and will be rescued
+  stuckThresholdMs: 5000
+  # Enable/disable preemptive bridging (placing blocks ahead of NPC)
+  preemptive: true
+  # How many server ticks between bridging system runs (1 tick = 50ms). Default: 15 = 0.75 seconds
+  tickIntervalTicks: 15
+
 # Example bed defense template (relative positions to bed location)
 bedDefenseTemplate:
   - [0, 0, 0, END_STONE]

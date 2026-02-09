@@ -1,5 +1,8 @@
 package com.andrei1058.bedwarsnpcfill;
 
+import com.andrei1058.bedwars.BedWars;
+import com.andrei1058.bedwars.api.arena.GameState;
+import com.andrei1058.bedwars.api.arena.IArena;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -23,7 +26,8 @@ public class BedWarsNPCFillCommand implements CommandExecutor {
         if (args.length == 0) {
             player.sendMessage("§a[BedWarsNPCFill] Commands:");
             player.sendMessage("§e/bedwarsnpcfill test - Test if you're in a BedWars arena");
-            player.sendMessage("§e/bedwarsnpcfill start - Force start countdown if in arena");
+            player.sendMessage("§e/bedwarsnpcfill start - Spawn NPCs and start immediately");
+            player.sendMessage("§e/bedwarsnpcfill forcestart - Alias for start");
             player.sendMessage("§e/bedwarsnpcfill cleannpcs - Remove all spawned NPCs");
             return true;
         }
@@ -33,12 +37,12 @@ public class BedWarsNPCFillCommand implements CommandExecutor {
             return true;
         }
 
-        if (args[0].equalsIgnoreCase("start")) {
-            forceStartCountdown(player);
+        if (args[0].equalsIgnoreCase("start") || args[0].equalsIgnoreCase("forcestart")) {
+            forceStartGame(player);
             return true;
         }
 
-        if (args[0].equalsIgnoreCase("cleannpcs")) {
+        if (args[0].equalsIgnoreCase("cleannpcs") || args[0].equalsIgnoreCase("clearnpcs")) {
             cleanNPCs(player);
             return true;
         }
@@ -143,68 +147,88 @@ public class BedWarsNPCFillCommand implements CommandExecutor {
         }
     }
 
-    private void forceStartCountdown(Player player) {
-        try {
-            // Use reflection to get BedWars API
-            Object bedWarsAPI = Bukkit.getServicesManager().getRegistration(
-                Class.forName("com.andrei1058.bedwars.api.BedWars")
-            ).getProvider();
+    private void forceStartGame(Player player) {
+        IArena arena = resolvePlayerArena(player);
+        if (arena == null) {
+            player.sendMessage("§c[BedWarsNPCFill] You must be inside a BedWars arena to force start it.");
+            return;
+        }
 
-            if (bedWarsAPI != null) {
-                // Get arena by player using reflection
-                Object arenaUtil = bedWarsAPI.getClass().getMethod("getArenaUtil").invoke(bedWarsAPI);
-                Object arena = arenaUtil.getClass().getMethod("getArenaByPlayer", Player.class).invoke(arenaUtil, player);
+        String error = ArenaScheduler.forceStartNow(arena.getArenaName(), player);
+        if (error != null) {
+            player.sendMessage("§c[BedWarsNPCFill] Unable to force start: §e" + error);
+            return;
+        }
 
-                if (arena != null) {
-                    String arenaName = (String) arena.getClass().getMethod("getArenaName").invoke(arena);
-                    Object status = arena.getClass().getMethod("getStatus").invoke(arena);
-
-                    if (status.toString().equalsIgnoreCase("waiting")) {
-                        player.sendMessage("§a[BedWarsNPCFill] Starting countdown for arena: §e" + arenaName);
-                        
-                        player.sendMessage("§a[BedWarsNPCFill] NPC filling is currently disabled");
-                        
-                    } else {
-                        player.sendMessage("§c[BedWarsNPCFill] Arena is not in waiting status! Current: " + status);
-                    }
-                } else {
-                    player.sendMessage("§c[BedWarsNPCFill] You are not in a BedWars arena!");
-                }
-            } else {
-                player.sendMessage("§c[BedWarsNPCFill] BedWars API not available!");
-            }
-        } catch (Exception e) {
-            player.sendMessage("§c[BedWarsNPCFill] Error: " + e.getMessage());
-            e.printStackTrace();
+        for (Player arenaPlayer : arena.getPlayers()) {
+            arenaPlayer.sendMessage("§a[BedWarsNPCFill] §e" + player.getName() + " forced the game to start with NPCs!");
         }
     }
 
     private void cleanNPCs(Player player) {
         try {
-            // Get count of NPCs before removal for feedback
-            int beforeCount = 0;
-            for (net.citizensnpcs.api.npc.NPC npc : net.citizensnpcs.api.CitizensAPI.getNPCRegistry()) {
-                if (npc.getName().startsWith("NPC_")) {
-                    beforeCount++;
-                }
+            if (!Bukkit.getPluginManager().isPluginEnabled("Citizens")) {
+                player.sendMessage("§c[BedWarsNPCFill] Citizens plugin is required to manage NPCs.");
+                return;
             }
-            
+
+            net.citizensnpcs.api.npc.NPCRegistry registry = net.citizensnpcs.api.CitizensAPI.getNPCRegistry();
+            if (registry == null) {
+                player.sendMessage("§c[BedWarsNPCFill] Citizens NPC registry is unavailable.");
+                return;
+            }
+
+            int beforeCount = countPluginNPCs(registry);
+
             NPCManager.removeAllNPCs();
-            
-            // Get count after removal to confirm
-            int afterCount = 0;
-            for (net.citizensnpcs.api.npc.NPC npc : net.citizensnpcs.api.CitizensAPI.getNPCRegistry()) {
-                if (npc.getName().startsWith("NPC_")) {
-                    afterCount++;
-                }
-            }
-            
+
+            int afterCount = countPluginNPCs(registry);
+
             int removedCount = beforeCount - afterCount;
             player.sendMessage("§a[BedWarsNPCFill] Removed " + removedCount + " plugin-created NPCs!");
             player.sendMessage("§a[BedWarsNPCFill] " + afterCount + " plugin NPCs remaining.");
         } catch (Exception e) {
-            player.sendMessage("§c[BedWarsNPCFill] Error cleaning NPCs: " + e.getMessage());
+            player.sendMessage("§c[BedWarsNPCFill] Error cleaning NPCs: " + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
             e.printStackTrace();
         }
+    }
+
+    private int countPluginNPCs(net.citizensnpcs.api.npc.NPCRegistry registry) {
+        java.util.List<net.citizensnpcs.api.npc.NPC> snapshot = new java.util.ArrayList<>();
+        for (net.citizensnpcs.api.npc.NPC npc : registry) {
+            snapshot.add(npc);
+        }
+        int count = 0;
+        for (net.citizensnpcs.api.npc.NPC npc : snapshot) {
+            if (NPCManager.isPluginNPC(npc)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private IArena resolvePlayerArena(Player player) {
+        try {
+            if (BedWars.getAPI() != null && BedWars.getAPI().getArenaUtil() != null) {
+                return BedWars.getAPI().getArenaUtil().getArenaByPlayer(player);
+            }
+        } catch (Exception ignored) {
+        }
+
+        try {
+            Object bedWarsAPI = Bukkit.getServicesManager().getRegistration(
+                Class.forName("com.andrei1058.bedwars.api.BedWars")
+            ).getProvider();
+            if (bedWarsAPI != null) {
+                Object arenaUtil = bedWarsAPI.getClass().getMethod("getArenaUtil").invoke(bedWarsAPI);
+                Object arena = arenaUtil.getClass().getMethod("getArenaByPlayer", Player.class).invoke(arenaUtil, player);
+                if (arena instanceof IArena) {
+                    return (IArena) arena;
+                }
+            }
+        } catch (Exception ex) {
+            Bukkit.getLogger().warning("[BedWarsNPCFill] Failed to resolve arena for player " + player.getName() + ": " + ex.getMessage());
+        }
+        return null;
     }
 }
